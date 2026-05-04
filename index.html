@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>トランプ シャッフル可視化</title>
+<style>
+  :root {
+    --bg: #0e1420;
+    --panel: #161e2e;
+    --panel-2: #1f2a40;
+    --text: #e7ecf3;
+    --muted: #8794ac;
+    --accent: #6aa2ff;
+    --accent-2: #a48bff;
+    --red: #e44b5a;
+    --black: #1a1f2b;
+    --card-bg: #fafafa;
+    --border: rgba(255,255,255,0.08);
+    --banker: #e44b5a;
+    --player: #4d8ff0;
+    --tie:    #3ec76e;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+                 "Noto Sans JP", "Yu Gothic", sans-serif;
+  }
+  header {
+    padding: 18px 22px 12px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #131a28, #0e1420);
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(8px);
+  }
+  h1 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+  }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  button, .seg {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.05s;
+  }
+  button:hover { background: var(--panel-2); }
+  button:active { transform: translateY(1px); }
+  button.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-color: transparent;
+    color: white;
+    font-weight: 600;
+  }
+  .seg-group { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg-group .seg {
+    border: none; border-radius: 0;
+    padding: 8px 12px;
+    background: transparent;
+  }
+  .seg-group .seg.active { background: var(--accent); color: white; }
+
+  .deck-input {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 6px 4px 10px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .deck-input label { color: var(--muted); }
+  .deck-input input {
+    width: 56px;
+    padding: 6px 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: right;
+    -moz-appearance: textfield;
+  }
+  .deck-input input::-webkit-outer-spin-button,
+  .deck-input input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .deck-input .step-btns { display: inline-flex; flex-direction: column; gap: 2px; }
+  .deck-input .step {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    width: 22px;
+    height: 14px;
+    line-height: 1;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .deck-input .step:hover { background: var(--accent); border-color: transparent; }
+
+  .stats {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .stats b { color: var(--text); font-weight: 600; margin-left: 4px; }
+
+  main { padding: 18px 22px 60px; }
+
+  /* ---- Round containers ---- */
+  .rounds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .round {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1.5px solid transparent;
+    background: var(--panel);
+  }
+  .round.banker { border-color: var(--banker); background: rgba(228, 75, 90, 0.10); }
+  .round.player { border-color: var(--player); background: rgba(77, 143, 240, 0.10); }
+  .round.tie    { border-color: var(--tie);    background: rgba(62, 199, 110, 0.10); }
+  .round-header {
+    padding: 5px 10px;
+    font-size: 11px;
+    color: white;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    letter-spacing: 0.02em;
+  }
+  .round.banker .round-header { background: var(--banker); }
+  .round.player .round-header { background: var(--player); }
+  .round.tie    .round-header { background: var(--tie); }
+  .round-header .label-result { font-weight: 700; }
+  .round-header .label-totals { opacity: 0.95; font-variant-numeric: tabular-nums; }
+  .round-cards {
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    align-items: flex-start;
+  }
+  .role-tag {
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    padding-top: 2px;
+    letter-spacing: 0.04em;
+  }
+  .card-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+
+  /* ---- Compact grid (legacy, unused but kept) ---- */
+  .grid-compact {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    gap: 4px;
+  }
+  .cell {
+    background: var(--card-bg);
+    color: var(--black);
+    border-radius: 5px;
+    padding: 4px 2px 2px;
+    text-align: center;
+    line-height: 1;
+    position: relative;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.3);
+    user-select: none;
+    min-width: 38px;
+  }
+  .cell .rank { font-weight: 700; font-size: 14px; }
+  .cell .suit { font-size: 14px; }
+  .cell .pos {
+    font-size: 9px;
+    color: #999;
+    margin-top: 2px;
+  }
+  .cell.red .rank, .cell.red .suit { color: var(--red); }
+  .cell.black .rank, .cell.black .suit { color: var(--black); }
+
+  /* ---- Realistic cards ---- */
+  .grid-real {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 8px;
+  }
+  .card {
+    background: var(--card-bg);
+    color: var(--black);
+    border-radius: 8px;
+    aspect-ratio: 2.5 / 3.5;
+    position: relative;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    overflow: hidden;
+    user-select: none;
+  }
+  .card .corner {
+    position: absolute;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+  }
+  .card .corner .r { font-size: 14px; }
+  .card .corner .s { font-size: 12px; }
+  .card .corner.tl { top: 5px; left: 6px; }
+  .card .corner.br {
+    bottom: 5px; right: 6px;
+    transform: rotate(180deg);
+  }
+  .card .center-suit {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    opacity: 0.85;
+  }
+  .card .pos-badge {
+    position: absolute;
+    bottom: 3px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: #777;
+    background: rgba(255,255,255,0.85);
+    padding: 1px 4px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .card.red, .card.red .corner, .card.red .center-suit { color: var(--red); }
+  .card.black, .card.black .corner, .card.black .center-suit { color: var(--black); }
+
+  /* Hidden views */
+  .view { display: none; }
+  .view.active { display: grid; }
+
+  /* Distribution summary */
+  .summary {
+    margin-top: 22px;
+    padding: 14px 16px;
+    background: var(--panel);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .summary h3 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .summary-row {
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .summary-row span b { color: var(--text); font-weight: 600; }
+
+  @media (max-width: 600px) {
+    .stats { width: 100%; margin-left: 0; }
+    main { padding: 14px; }
+    .grid-compact { grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); }
+    .grid-real { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎴 トランプ シャッフル可視化 <span id="title-count" style="color: var(--muted); font-weight: 400;">（6デック / 312枚）</span></h1>
+  <div class="sub">Fisher–Yates シャッフルでランダム並べ替え。番号は並びの位置。</div>
+  <div class="toolbar">
+    <div class="deck-input">
+      <label for="deck-count">デック数</label>
+      <input type="number" id="deck-count" min="1" max="100" value="6" />
+      <div class="step-btns">
+        <button class="step" id="deck-up" title="増やす">▲</button>
+        <button class="step" id="deck-down" title="減らす">▼</button>
+      </div>
+    </div>
+    <button class="primary" id="reshuffle">🔀 シャッフルし直す</button>
+    <div class="seg-group" role="tablist">
+      <button class="seg active" data-view="compact">コンパクト</button>
+      <button class="seg" data-view="real">リアル風</button>
+    </div>
+    <button id="copy-btn" title="並びをテキストでコピー">📋 並びをコピー</button>
+    <div class="stats" id="stats">
+      <span>合計<b id="total">0</b></span>
+      <span>♠<b id="cnt-spade">0</b></span>
+      <span>♥<b id="cnt-heart">0</b></span>
+      <span>♦<b id="cnt-diamond">0</b></span>
+      <span>♣<b id="cnt-club">0</b></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="rounds view active" id="view-compact"></div>
+  <div class="rounds view" id="view-real"></div>
+
+  <div class="summary">
+    <h3>並びの統計</h3>
+    <div class="summary-row">
+      <span>ラウンド数：<b id="rounds-total">—</b></span>
+      <span style="color: var(--banker);">バンカー勝ち：<b id="rounds-banker">—</b></span>
+      <span style="color: var(--player);">プレイヤー勝ち：<b id="rounds-player">—</b></span>
+      <span style="color: var(--tie);">タイ：<b id="rounds-tie">—</b></span>
+      <span>未使用カード：<b id="rounds-unused">—</b></span>
+    </div>
+    <div class="summary-row" style="margin-top:8px;">
+      <span>各ランク出現数（期待値: <span id="expected-rank">24</span>）：<b id="rank-stats">—</b></span>
+    </div>
+  </div>
+</main>
+
+<script>
+  const SUITS = [
+    { sym: '♠', name: 'spade',   color: 'black' },
+    { sym: '♥', name: 'heart',   color: 'red'   },
+    { sym: '♦', name: 'diamond', color: 'red'   },
+    { sym: '♣', name: 'club',    color: 'black' },
+  ];
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+  function buildShoe(deckCount) {
+    const cards = [];
+    for (let d = 0; d < deckCount; d++) {
+      for (const suit of SUITS) {
+        for (const rank of RANKS) {
+          cards.push({ rank, suit: suit.sym, color: suit.color, name: suit.name });
+        }
+      }
+    }
+    return cards;
+  }
+
+  // Fisher–Yates
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  // Baccarat card value: A=1, 2-9=face, 10/J/Q/K=0
+  function bacValue(rank) {
+    if (rank === 'A') return 1;
+    if (rank === 'J' || rank === 'Q' || rank === 'K' || rank === '10') return 0;
+    return parseInt(rank, 10);
+  }
+
+  // Play one baccarat round starting from cards[startIdx]. Returns null if not enough cards.
+  function playRound(cards, startIdx) {
+    if (startIdx + 4 > cards.length) return null;
+    // Initial deal: P, B, P, B
+    const player = [cards[startIdx], cards[startIdx + 2]];
+    const banker = [cards[startIdx + 1], cards[startIdx + 3]];
+    const order  = [
+      { card: cards[startIdx],     role: 'P1' },
+      { card: cards[startIdx + 1], role: 'B1' },
+      { card: cards[startIdx + 2], role: 'P2' },
+      { card: cards[startIdx + 3], role: 'B2' },
+    ];
+    let used = 4;
+    let pTotal = (bacValue(player[0].rank) + bacValue(player[1].rank)) % 10;
+    let bTotal = (bacValue(banker[0].rank) + bacValue(banker[1].rank)) % 10;
+
+    const isNatural = pTotal >= 8 || bTotal >= 8;
+    let playerThirdValue = null;
+
+    if (!isNatural) {
+      // Player rule
+      if (pTotal <= 5) {
+        if (startIdx + used >= cards.length) return null;
+        const third = cards[startIdx + used];
+        order.push({ card: third, role: 'P3' });
+        used++;
+        playerThirdValue = bacValue(third.rank);
+        pTotal = (pTotal + playerThirdValue) % 10;
+      }
+      // Banker rule
+      let bankerDraws = false;
+      if (playerThirdValue === null) {
+        bankerDraws = bTotal <= 5;
+      } else {
+        const x = playerThirdValue;
+        if (bTotal <= 2) bankerDraws = true;
+        else if (bTotal === 3) bankerDraws = (x !== 8);
+        else if (bTotal === 4) bankerDraws = (x >= 2 && x <= 7);
+        else if (bTotal === 5) bankerDraws = (x >= 4 && x <= 7);
+        else if (bTotal === 6) bankerDraws = (x === 6 || x === 7);
+        else bankerDraws = false;
+      }
+      if (bankerDraws) {
+        if (startIdx + used >= cards.length) return null;
+        const third = cards[startIdx + used];
+        order.push({ card: third, role: 'B3' });
+        used++;
+        bTotal = (bTotal + bacValue(third.rank)) % 10;
+      }
+    }
+
+    let result;
+    if (pTotal > bTotal) result = 'player';
+    else if (bTotal > pTotal) result = 'banker';
+    else result = 'tie';
+
+    return { order, used, startIdx, pTotal, bTotal, result };
+  }
+
+  function playAllRounds(cards) {
+    const rounds = [];
+    let i = 0;
+    while (i < cards.length) {
+      const r = playRound(cards, i);
+      if (!r) break;
+      rounds.push(r);
+      i += r.used;
+    }
+    return { rounds, unused: cards.length - i };
+  }
+
+  const RESULT_LABEL = {
+    banker: 'バンカー',
+    player: 'プレイヤー',
+    tie: 'タイ',
+  };
+
+  function render(cards) {
+    const compact = document.getElementById('view-compact');
+    const real = document.getElementById('view-real');
+    compact.innerHTML = '';
+    real.innerHTML = '';
+
+    const { rounds, unused } = playAllRounds(cards);
+
+    const fragC = document.createDocumentFragment();
+    const fragR = document.createDocumentFragment();
+
+    rounds.forEach((rd, ri) => {
+      // ----- compact group -----
+      const groupC = document.createElement('div');
+      groupC.className = 'round ' + rd.result;
+      groupC.innerHTML = `
+        <div class="round-header">
+          <span><span class="label-result">R${ri + 1} · ${RESULT_LABEL[rd.result]}</span></span>
+          <span class="label-totals">P:${rd.pTotal} / B:${rd.bTotal}</span>
+        </div>
+      `;
+      const rowC = document.createElement('div');
+      rowC.className = 'round-cards';
+      rd.order.forEach((entry, k) => {
+        const c = entry.card;
+        const pos = rd.startIdx + k + 1;
+        const wrap = document.createElement('div');
+        wrap.className = 'card-wrap';
+        wrap.innerHTML = `
+          <div class="cell ${c.color}">
+            <div class="rank">${c.rank}</div>
+            <div class="suit">${c.suit}</div>
+            <div class="pos">${pos}</div>
+          </div>
+          <div class="role-tag">${entry.role}</div>
+        `;
+        rowC.appendChild(wrap);
+      });
+      groupC.appendChild(rowC);
+      fragC.appendChild(groupC);
+
+      // ----- realistic group -----
+      const groupR = document.createElement('div');
+      groupR.className = 'round ' + rd.result;
+      groupR.innerHTML = `
+        <div class="round-header">
+          <span><span class="label-result">R${ri + 1} · ${RESULT_LABEL[rd.result]}</span></span>
+          <span class="label-totals">P:${rd.pTotal} / B:${rd.bTotal}</span>
+        </div>
+      `;
+      const rowR = document.createElement('div');
+      rowR.className = 'round-cards';
+      rd.order.forEach((entry, k) => {
+        const c = entry.card;
+        const pos = rd.startIdx + k + 1;
+        const wrap = document.createElement('div');
+        wrap.className = 'card-wrap';
+        const cardEl = document.createElement('div');
+        cardEl.className = 'card ' + c.color;
+        cardEl.style.width = '60px';
+        cardEl.innerHTML = `
+          <div class="corner tl"><div class="r">${c.rank}</div><div class="s">${c.suit}</div></div>
+          <div class="center-suit">${c.suit}</div>
+          <div class="corner br"><div class="r">${c.rank}</div><div class="s">${c.suit}</div></div>
+          <div class="pos-badge">#${pos}</div>
+        `;
+        wrap.appendChild(cardEl);
+        const tag = document.createElement('div');
+        tag.className = 'role-tag';
+        tag.textContent = entry.role;
+        wrap.appendChild(tag);
+        rowR.appendChild(wrap);
+      });
+      groupR.appendChild(rowR);
+      fragR.appendChild(groupR);
+    });
+
+    compact.appendChild(fragC);
+    real.appendChild(fragR);
+
+    updateStats(cards, rounds, unused);
+  }
+
+  function updateStats(cards, rounds, unused) {
+    const cnt = { spade:0, heart:0, diamond:0, club:0 };
+    const rankCnt = {};
+    RANKS.forEach(r => rankCnt[r] = 0);
+    cards.forEach(c => {
+      cnt[c.name]++;
+      rankCnt[c.rank]++;
+    });
+    document.getElementById('total').textContent = cards.length;
+    document.getElementById('cnt-spade').textContent = cnt.spade;
+    document.getElementById('cnt-heart').textContent = cnt.heart;
+    document.getElementById('cnt-diamond').textContent = cnt.diamond;
+    document.getElementById('cnt-club').textContent = cnt.club;
+
+    document.getElementById('rank-stats').textContent =
+      RANKS.map(r => `${r}:${rankCnt[r]}`).join(' / ');
+
+    // round results
+    let bw = 0, pw = 0, tw = 0;
+    rounds.forEach(r => {
+      if (r.result === 'banker') bw++;
+      else if (r.result === 'player') pw++;
+      else tw++;
+    });
+    document.getElementById('rounds-total').textContent  = `${rounds.length}`;
+    document.getElementById('rounds-banker').textContent = `${bw} (${pct(bw, rounds.length)}%)`;
+    document.getElementById('rounds-player').textContent = `${pw} (${pct(pw, rounds.length)}%)`;
+    document.getElementById('rounds-tie').textContent    = `${tw} (${pct(tw, rounds.length)}%)`;
+    document.getElementById('rounds-unused').textContent = `${unused}枚`;
+  }
+  function pct(n, total) { return total === 0 ? '0.0' : (n * 100 / total).toFixed(1); }
+
+  let currentCards = [];
+
+  function getDeckCount() {
+    const el = document.getElementById('deck-count');
+    let n = parseInt(el.value, 10);
+    if (isNaN(n) || n < 1) n = 1;
+    if (n > 100) n = 100;
+    el.value = n;
+    return n;
+  }
+
+  function reshuffle() {
+    const decks = getDeckCount();
+    currentCards = shuffle(buildShoe(decks));
+    document.getElementById('title-count').textContent =
+      `（${decks}デック / ${decks * 52}枚）`;
+    document.getElementById('expected-rank').textContent = decks * 4;
+    render(currentCards);
+  }
+
+  // deck count step buttons & enter key
+  document.getElementById('deck-up').addEventListener('click', () => {
+    const el = document.getElementById('deck-count');
+    el.value = Math.min(100, (parseInt(el.value, 10) || 0) + 1);
+    reshuffle();
+  });
+  document.getElementById('deck-down').addEventListener('click', () => {
+    const el = document.getElementById('deck-count');
+    el.value = Math.max(1, (parseInt(el.value, 10) || 2) - 1);
+    reshuffle();
+  });
+  document.getElementById('deck-count').addEventListener('change', reshuffle);
+  document.getElementById('deck-count').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); reshuffle(); }
+  });
+
+  // view toggle
+  document.querySelectorAll('.seg-group .seg').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.seg-group .seg').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const view = btn.dataset.view;
+      document.getElementById('view-compact').classList.toggle('active', view === 'compact');
+      document.getElementById('view-real').classList.toggle('active', view === 'real');
+    });
+  });
+
+  document.getElementById('reshuffle').addEventListener('click', reshuffle);
+
+  document.getElementById('copy-btn').addEventListener('click', async () => {
+    const { rounds, unused } = playAllRounds(currentCards);
+    const lines = [];
+    rounds.forEach((r, i) => {
+      const cardStr = r.order.map(o => `${o.role}=${o.card.rank}${o.card.suit}`).join(' ');
+      lines.push(`R${i+1} [${RESULT_LABEL[r.result]}] P:${r.pTotal}/B:${r.bTotal}  ${cardStr}`);
+    });
+    if (unused > 0) lines.push(`(残り ${unused} 枚は次ラウンドに不足のため未使用)`);
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      const b = document.getElementById('copy-btn');
+      const orig = b.textContent;
+      b.textContent = '✅ コピーしました';
+      setTimeout(() => b.textContent = orig, 1500);
+    } catch (e) {
+      alert('コピーに失敗しました: ' + e.message);
+    }
+  });
+
+  // initial
+  reshuffle();
+</script>
+</body>
+</html>
