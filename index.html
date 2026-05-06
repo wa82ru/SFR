@@ -259,12 +259,14 @@
   /* Distribution summary */
   .summary {
     margin-top: 22px;
-    padding: 14px 16px;
+    padding: 14px 16px 14px 16px;
     background: var(--panel);
     border-radius: 10px;
     border: 1px solid var(--border);
     font-size: 12px;
     color: var(--muted);
+    position: relative;
+    transition: box-shadow 0.2s, background 0.2s;
   }
   .summary h3 {
     margin: 0 0 8px 0;
@@ -275,6 +277,36 @@
     display: flex; gap: 18px; flex-wrap: wrap;
   }
   .summary-row span b { color: var(--text); font-weight: 600; }
+  .summary .toggle-float {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .summary .toggle-float:hover { background: var(--accent); border-color: transparent; }
+
+  /* Floating mode: pinned to viewport bottom */
+  .summary.floating {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    margin-top: 0;
+    background: rgba(22, 30, 46, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
+    z-index: 20;
+  }
+  /* Add bottom padding to main so cards aren't hidden beneath the floating panel */
+  body.has-floating main { padding-bottom: 180px; }
 
   @media (max-width: 600px) {
     .stats { width: 100%; margin-left: 0; }
@@ -317,7 +349,8 @@
   <div class="rounds view active" id="view-compact"></div>
   <div class="rounds view" id="view-real"></div>
 
-  <div class="summary">
+  <div class="summary floating" id="summary-panel">
+    <button class="toggle-float" id="toggle-float" title="フロート表示のオン／オフ">📌 フロートOFF</button>
     <h3>並びの統計</h3>
     <div class="summary-row">
       <span>ラウンド数：<b id="rounds-total">—</b></span>
@@ -609,6 +642,20 @@
   });
 
   document.getElementById('reshuffle').addEventListener('click', reshuffle);
+
+  // floating toggle
+  function applyFloatingState(isFloating) {
+    const panel = document.getElementById('summary-panel');
+    const btn = document.getElementById('toggle-float');
+    panel.classList.toggle('floating', isFloating);
+    document.body.classList.toggle('has-floating', isFloating);
+    btn.textContent = isFloating ? '📌 フロートOFF' : '📍 フロートON';
+  }
+  applyFloatingState(true); // default ON
+  document.getElementById('toggle-float').addEventListener('click', () => {
+    const panel = document.getElementById('summary-panel');
+    applyFloatingState(!panel.classList.contains('floating'));
+  });
 
   document.getElementById('copy-btn').addEventListener('click', async () => {
     const { rounds, unused } = playAllRounds(currentCards);
